@@ -1,0 +1,41 @@
+# .github/workflows/deploy.yml
+name: Deploy Application
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '16'
+
+      - name: Install dependencies
+        run: npm install --prefix frontend
+
+      - name: Build Frontend
+        run: npm run build --prefix frontend
+
+      - name: Docker Build and Push
+        run: |
+          docker build -t ${{ secrets.AWS_ECR_URI }}/auth-service:latest services/auth-service
+          docker build -t ${{ secrets.AWS_ECR_URI }}/report-service:latest services/report-service
+          docker push ${{ secrets.AWS_ECR_URI }}/auth-service:latest
+          docker push ${{ secrets.AWS_ECR_URI }}/report-service:latest
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to AWS ECS
+        run: |
+          aws ecs update-service --cluster my-cluster --service auth-service --force-new-deployment
+          aws ecs update-service --cluster my-cluster --service report-service --force-new-deployment
